@@ -27,14 +27,14 @@ type CommandArgs struct {
 var entryMap = make(map[int64]*Entry)
 
 func main() {
-	tasks := make(chan []byte, 256)
+	tasks := make(chan []byte, 128)
 	done := make(chan bool)
 
 	from := os.Args[1]
 	to := os.Args[2]
 
-	months := 2
-	days := 3
+	months := 12
+	days := 31
 	//var wg sync.WaitGroup
 	for m := 1; m <= months; m++ {
 		month := fmt.Sprintf("%d", m)
@@ -74,6 +74,7 @@ func main() {
 					e.Insert(collection)
 				}
 				fmt.Println("done...")
+				close(tasks)
 				os.Exit(0)
 			}
 			break
@@ -81,7 +82,6 @@ func main() {
 			// do nothing
 		}
 	}
-	close(tasks)
 	//wg.Wait()
 }
 
