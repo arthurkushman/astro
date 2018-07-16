@@ -33,12 +33,12 @@ func main() {
 	to := os.Args[2]
 
 	//var wg sync.WaitGroup
-	for m := 1; m <= 1; m++ {
+	for m := 1; m <= 12; m++ {
 		month := fmt.Sprintf("%d", m)
 		if m < 10 {
 			month = fmt.Sprintf("%s%d", "0", m)
 		}
-		for d := 1; d <= 10; d++ { // в случае перебора командная строка ничего не выведет - не заморачиваемся на даты
+		for d := 1; d <= 31; d++ { // last days are dropped so don't care
 			day := fmt.Sprintf("%d", d)
 			if d < 10 {
 				day = fmt.Sprintf("%s%d", "0", d)
@@ -52,11 +52,18 @@ func main() {
 				out, _ := cmd.Output()
 				tasks <- out
 			}(&inputArgs, tasks)
-
-			out := <-tasks
+		}
+	}
+	// non-blocking selection of green-threads - awesome =) yum-yum
+	for {
+		select {
+		case out := <-tasks:
 			strSliced := strings.Split(string(out), "\n")
 			// collect data like cityId, sunrise, sunset
 			processOutput(strSliced)
+			break
+		default:
+			// do nothing
 		}
 	}
 	close(tasks)
@@ -81,6 +88,8 @@ func Connect() *mongo.Collection {
 }
 
 func processOutput(strSliced []string) {
+	// starting process a day
+	fmt.Println("starting process a day")
 	var cityId int64 = 0
 	var sunsetDt string = ""
 	var sunriseDt string = ""
