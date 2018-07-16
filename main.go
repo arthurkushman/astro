@@ -20,6 +20,7 @@ var entryMap = make(map[int64]*Entry)
 
 func main() {
 	tasks := make(chan *exec.Cmd, 256)
+
 	//var wg sync.WaitGroup
 	for m := 1; m <= 12; m++ {
 		month := string(m)
@@ -43,11 +44,26 @@ func main() {
 			processOutput(strSliced)
 		}
 	}
+	close(tasks)
+
+	collection := Connect()
 	for _, e := range entryMap {
-		//fmt.Println(e)
-		e.Insert()
+		fmt.Println(e)
+		e.Insert(collection)
 	}
 	//wg.Wait()
+}
+
+func Connect() *mongo.Collection {
+	client, err := mongo.NewClient("mongodb://localhost:27017")
+	if err != nil {
+		log.Fatal(err)
+	}
+	errContext := client.Connect(context.Background())
+	if errContext != nil {
+		log.Fatal(errContext)
+	}
+	return client.Database("climate").Collection("gissun")
 }
 
 func processOutput(strSliced []string) {
@@ -96,17 +112,8 @@ func processOutput(strSliced []string) {
 }
 
 // write object to mongodb
-func (entry *Entry) Insert() {
-	client, err := mongo.NewClient("mongodb://localhost:27017")
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = client.Connect(context.Background())
-	if err != nil {
-		log.Fatal(err)
-	}
-	collection := client.Database("climate").Collection("gissun")
-	res, err := collection.InsertOne(context.Background(), entry)
+func (entry *Entry) Insert(collection *mongo.Collection) {
+	_, err := collection.InsertOne(context.Background(), entry)
 	if err != nil {
 		log.Fatal(err)
 	}
