@@ -28,32 +28,38 @@ var entryMap = make(map[int64]*Entry)
 
 func main() {
 	tasks := make(chan []byte, 256)
+	done := make(chan bool)
 
 	from := os.Args[1]
 	to := os.Args[2]
 
+	months := 2
+	days := 3
 	//var wg sync.WaitGroup
-	for m := 1; m <= 12; m++ {
+	for m := 1; m <= months; m++ {
 		month := fmt.Sprintf("%d", m)
 		if m < 10 {
 			month = fmt.Sprintf("%s%d", "0", m)
 		}
-		for d := 1; d <= 31; d++ { // last days are dropped so don't care
+		for d := 1; d <= days; d++ { // last days are dropped so don't care
 			day := fmt.Sprintf("%d", d)
 			if d < 10 {
 				day = fmt.Sprintf("%s%d", "0", d)
 			}
 			fmt.Println("month: ", month, "day: ", day)
 			inputArgs := CommandArgs{Month: month, Day: day, From: from, To: to}
-			go func(inputArgs *CommandArgs, tasks chan []byte) {
+			go func(inputArgs *CommandArgs, tasks chan []byte, m, d int) {
 				//defer wg.Done()
 				args := []string{"weather:sun", inputArgs.Month, inputArgs.Day, inputArgs.From, inputArgs.To}
 				cmd := exec.Command("/var/sites/gismeteo/current/console", args...)
 				out, _ := cmd.Output()
 				tasks <- out
-			}(&inputArgs, tasks)
+				toI, _ := strconv.Atoi(to)
+				done <- len(entryMap) == toI-1 && d == days && months == m
+			}(&inputArgs, tasks, m, d)
 		}
 	}
+
 	// non-blocking selection of green-threads - awesome =) yum-yum
 	for {
 		select {
@@ -61,17 +67,21 @@ func main() {
 			strSliced := strings.Split(string(out), "\n")
 			// collect data like cityId, sunrise, sunset
 			processOutput(strSliced)
+			if <-done {
+				fmt.Println("connect...")
+				collection := Connect()
+				for _, e := range entryMap {
+					e.Insert(collection)
+				}
+				fmt.Println("done...")
+				os.Exit(0)
+			}
 			break
 		default:
 			// do nothing
 		}
 	}
 	close(tasks)
-
-	collection := Connect()
-	for _, e := range entryMap {
-		e.Insert(collection)
-	}
 	//wg.Wait()
 }
 
