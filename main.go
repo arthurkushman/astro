@@ -8,6 +8,7 @@ import (
 	"log"
 	"context"
 	"os/exec"
+	"os"
 )
 
 type Entry struct {
@@ -16,10 +17,20 @@ type Entry struct {
 	Data   map[string]string `json:"data" bson:"data"`
 }
 
+type CommandArgs struct {
+	Month string
+	Day   string
+	From  string
+	To    string
+}
+
 var entryMap = make(map[int64]*Entry)
 
 func main() {
 	tasks := make(chan []byte, 256)
+
+	from := os.Args[1]
+	to := os.Args[2]
 
 	//var wg sync.WaitGroup
 	for m := 1; m <= 1; m++ {
@@ -27,19 +38,20 @@ func main() {
 		if m < 10 {
 			month = fmt.Sprintf("%s%d", "0", m)
 		}
-		for d := 1; d <= 31; d++ { // в случае перебора командная строка ничего не выведет - не заморачиваемся на даты
+		for d := 1; d <= 10; d++ { // в случае перебора командная строка ничего не выведет - не заморачиваемся на даты
 			day := fmt.Sprintf("%d", d)
 			if d < 10 {
 				day = fmt.Sprintf("%s%d", "0", d)
 			}
 			fmt.Println("month: ", month, "day: ", day)
-			go func(month string, day string, tasks chan []byte) {
+			inputArgs := CommandArgs{Month: month, Day: day, From: from, To: to}
+			go func(inputArgs *CommandArgs, tasks chan []byte) {
 				//defer wg.Done()
-				args := []string{"weather:sun", month, day}
+				args := []string{"weather:sun", inputArgs.Month, inputArgs.Day, inputArgs.From, inputArgs.To}
 				cmd := exec.Command("/var/sites/gismeteo/current/console", args...)
 				out, _ := cmd.Output()
 				tasks <- out
-			}(month, day, tasks)
+			}(&inputArgs, tasks)
 
 			out := <-tasks
 			strSliced := strings.Split(string(out), "\n")
@@ -51,7 +63,6 @@ func main() {
 
 	collection := Connect()
 	for _, e := range entryMap {
-		fmt.Println(e)
 		e.Insert(collection)
 	}
 	//wg.Wait()
