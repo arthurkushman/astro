@@ -1,13 +1,13 @@
 package main
 
 import (
-	"os/exec"
 	"fmt"
 	"strings"
 	"strconv"
 	"github.com/mongodb/mongo-go-driver/mongo"
 	"log"
 	"context"
+	"os/exec"
 )
 
 type Entry struct {
@@ -19,26 +19,29 @@ type Entry struct {
 var entryMap = make(map[int64]*Entry)
 
 func main() {
-	tasks := make(chan *exec.Cmd, 256)
+	tasks := make(chan []byte, 256)
 
 	//var wg sync.WaitGroup
-	for m := 1; m <= 12; m++ {
-		month := string(m)
+	for m := 1; m <= 1; m++ {
+		month := fmt.Sprintf("%d", m)
 		if m < 10 {
 			month = fmt.Sprintf("%s%d", "0", m)
 		}
 		for d := 1; d <= 31; d++ { // в случае перебора командная строка ничего не выведет - не заморачиваемся на даты
-			day := string(d)
+			day := fmt.Sprintf("%d", d)
 			if d < 10 {
 				day = fmt.Sprintf("%s%d", "0", d)
 			}
-			go func(month string, tasks chan *exec.Cmd) {
+			fmt.Println("month: ", month, "day: ", day)
+			go func(month string, day string, tasks chan []byte) {
 				//defer wg.Done()
 				args := []string{"weather:sun", month, day}
-				tasks <- exec.Command("/var/sites/gismeteo/current/console", args...)
-			}(month, tasks)
-			cmd := <-tasks
-			out, _ := cmd.Output()
+				cmd := exec.Command("/var/sites/gismeteo/current/console", args...)
+				out, _ := cmd.Output()
+				tasks <- out
+			}(month, day, tasks)
+
+			out := <-tasks
 			strSliced := strings.Split(string(out), "\n")
 			// collect data like cityId, sunrise, sunset
 			processOutput(strSliced)
