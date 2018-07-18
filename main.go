@@ -51,7 +51,6 @@ func main() {
 			month = fmt.Sprintf("%s%d", "0", m)
 		}
 		for d := 1; d <= days; d++ { // last days are dropped so don't care
-			//wg.Add(1)
 			day := fmt.Sprintf("%d", d)
 			if d < 10 {
 				day = fmt.Sprintf("%s%d", "0", d)
