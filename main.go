@@ -9,6 +9,7 @@ import (
 	"context"
 	"os/exec"
 	"os"
+	"sync"
 )
 
 type Entry struct {
@@ -28,15 +29,22 @@ type CommandArgs struct {
 var entryMap = make(map[int64]*Entry)
 
 func main() {
-	tasks := make(chan []byte, 128)
+	args := []string{" -y 2018", "-m 02", "-d 14", "-tz 180", "-lat 55.75", "-lon 37.61"}
+	cmd := exec.Command("/var/sites/gismeteo/current/gissun", args...)
+	b, err := cmd.CombinedOutput()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(b))
+
+	os.Exit(0)
 
 	from := os.Args[1]
 	to := os.Args[2]
 
 	months := 12
 	days := 31
-	threadCounter := 0
-
+	var wg sync.WaitGroup
 	for m := 1; m <= months; m++ {
 		month := fmt.Sprintf("%d", m)
 		if m < 10 {
@@ -48,41 +56,30 @@ func main() {
 			if d < 10 {
 				day = fmt.Sprintf("%s%d", "0", d)
 			}
-			fmt.Println("month: ", month, "day: ", day)
+
+			wg.Add(1)
 			inputArgs := CommandArgs{Month: month, Day: day, From: from, To: to, EntryMap: entryMap}
-			go func(inputArgs *CommandArgs, tasks chan []byte, m, d int) {
+			go func(inputArgs *CommandArgs) {
+				defer wg.Done()
 				args := []string{"weather:sun", inputArgs.Month, inputArgs.Day, inputArgs.From, inputArgs.To}
 				cmd := exec.Command("/var/sites/gismeteo/current/console", args...)
 				out, _ := cmd.Output()
-				tasks <- out
-			}(&inputArgs, tasks, m, d)
+				strSliced := strings.Split(string(out), "\n")
+				// collect data like cityId, sunrise, sunset
+				processOutput(strSliced)
+				fmt.Println("post process - month: ", month, "day: ", day)
+			}(&inputArgs)
 		}
 	}
 
 	// non-blocking selection of green-threads - awesome =) yum-yum
-	for {
-		select {
-		case out := <-tasks:
-			strSliced := strings.Split(string(out), "\n")
-			// collect data like cityId, sunrise, sunset
-			processOutput(strSliced)
-
-			threadCounter++
-			if threadCounter == months*days {
-				fmt.Println("mongo connect...")
-				collection := Connect()
-				for _, e := range entryMap {
-					e.Insert(collection)
-				}
-				fmt.Println("done...")
-				close(tasks)
-				os.Exit(0)
-			}
-			break
-		default:
-			// do nothing
-		}
+	wg.Wait()
+	fmt.Println("mongo connect...")
+	collection := Connect()
+	for _, e := range entryMap {
+		e.Insert(collection)
 	}
+	fmt.Println("done...")
 }
 
 func Connect() *mongo.Collection {
